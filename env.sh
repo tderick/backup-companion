@@ -18,4 +18,4 @@ set -e
 # === Optional Environment Variables with Defaults ===
 
 # Number of days of data retension
-NUMBER_OF_DAYS="${AWS_REGION:-15}"
+NUMBER_OF_DAYS="${NUMBER_OF_DAYS:-15}"
