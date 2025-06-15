@@ -6,7 +6,6 @@ if [ -f /usr/local/bin/env.sh ]; then
   source /usr/local/bin/env.sh
 fi
 
-
 # Ensure log directory exists
 mkdir -p /var/log/backup
 
@@ -22,6 +21,14 @@ EOF
 
 # Correct permissions
 chmod 0644 /etc/cron.d/backup_jobs
+
+# Capture Environment Variable
+{
+  # Read binary environ file directly
+  while IFS='=' read -r -d '' key value; do
+    printf 'export %s="%s"\n' "$key" "$value"
+  done < /proc/self/environ
+} > /etc/container_environment.sh
 
 # Start crond in foreground
 exec crond -f -s
