@@ -1,52 +1,58 @@
 #!/bin/bash
 set -euo pipefail
 
-source /etc/container_environment.sh
+# === Load environment variables ===
+[ -f /etc/container_environment.sh ] && source /etc/container_environment.sh
 
-# Function for logging with timestamp
+# === Log file setup ===
 LOGFILE="/var/log/autobackup.log"
+mkdir -p "$(dirname "$LOGFILE")"
+
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$LOGFILE"
 }
 
-# Move to /tmp for backup work
+# === Prepare backup folder ===
 cd /tmp
-
 current_date=$(date +'%d-%m-%Y')
 timestamp=$(date -u +'%Y-%m-%dT%H-%M-%SZ')
-
-log "Starting backup for database $DATABASE_NAME at $timestamp"
-
 backup_folder="${DATABASE_NAME}_backup_${timestamp}"
 
-# Create backup folder (with -p to avoid error if exists)
+log "Starting backup for database '${DATABASE_NAME}' at ${timestamp}"
 mkdir -p "$backup_folder"
 
-# # Path to filestore
-# filestore_dir="/var/lib/odoo/.local/share/Odoo/filestore/$DATABASE_NAME"
+# === Backup specified directories ===
+for dir_path in $DIRECTORIES_TO_BACKUP; do
+    if [ -d "$dir_path" ]; then
+        log "Backing up directory: $dir_path"
+        cp -a "$dir_path" "$backup_folder/"
+    else
+        log "Skipping missing directory: $dir_path"
+    fi
+done
 
-# if [ ! -d "$filestore_dir" ]; then
-#     log "ERROR: Filestore directory $filestore_dir does not exist!"
-#     exit 1
-# fi
+# === Dump PostgreSQL database ===
+export PGPASSWORD="$POSTGRES_PASSWORD"
+pg_dump -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$DATABASE_NAME" \
+    > "${backup_folder}/${DATABASE_NAME}_backup_${timestamp}.sql"
 
-# # Copy filestore
-# cp -r "$filestore_dir" "$backup_folder"
-
-# # Dump database using connection string to avoid duplication
 # PG_CONN="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${DATABASE_NAME}"
 # pg_dump "$PG_CONN" > "${backup_folder}/${DATABASE_NAME}_backup_${current_date}.sql"
+log "Database dump completed"
 
-# # Zip backup folder
-# zip -r "${backup_folder}.zip" "$backup_folder"
+# === Archive backup ===
+zip -rq "${backup_folder}.zip" "$backup_folder"
+log "Zipped backup to ${backup_folder}.zip"
 
-# # Remove backup folder after zipping
-# rm -rf "$backup_folder"
+# === Upload to object storage ===
+# aws --region "$AWS_REGION" \
+#     --endpoint-url "$AWS_S3_ENDPOINT_URL" \
+#     s3 cp "${backup_folder}.zip" "s3://${BUCKET_NAME}/${DATABASE_NAME}/${backup_folder}.zip"
 
-# # Upload to S3-compatible object storage
-# aws --region "$AWS_REGION" --endpoint-url "$AWS_S3_ENDPOINT_URL" s3 cp "${backup_folder}.zip" "s3://${BUCKET_NAME}/${DATABASE_NAME}/${backup_folder}.zip"
+# log "Uploaded backup to S3: ${BUCKET_NAME}/${DATABASE_NAME}/${backup_folder}.zip"
 
-# # Remove zip file after upload
-# rm -f "${backup_folder}.zip"
+# # === Cleanup ===
+# rm -rf "$backup_folder" "${backup_folder}.zip"
+# log "Cleaned up temporary files"
 
-log "Backup completed for database $DATABASE_NAME at $(date +'%d-%m-%Y_%Hh-%M')"
+# log "Backup completed for database '${DATABASE_NAME}' at $(date +'%Y-%m-%d %H:%M:%S')"

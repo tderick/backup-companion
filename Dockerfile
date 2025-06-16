@@ -5,9 +5,10 @@ RUN apk add --no-cache \
     bash \
     curl \
     unzip \
-    postgresql15-client \
+    postgresql17-client \
     cronie \
-    aws-cli
+    aws-cli \
+    zip
 
 # Copy scripts
 COPY autobackup.sh /usr/local/bin/autobackup.sh

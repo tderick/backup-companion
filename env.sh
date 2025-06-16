@@ -14,6 +14,7 @@ set -e
 : "${POSTGRES_HOST:?Environment variable POSTGRES_HOST is required}"
 : "${AWS_REGION:?Environment variable AWS_REGION is required}"
 : "${AWS_S3_ENDPOINT_URL:?Environment variable AWS_S3_ENDPOINT_URL is required}"
+: "${DIRECTORIES_TO_BACKUP:?Environment variable DIRECTORIES_TO_BACKUP is required}"
 
 # === Optional Environment Variables with Defaults ===
 
