@@ -39,16 +39,6 @@ cleanup() {
   local exit_code=$?
   set +e # Disable exit on error for this block
 
-  if [[ -n "${HEALTHCHECK_URL:-}" ]]; then
-    if [ $exit_code -eq 0 ]; then
-      log_info "Job finished successfully. Pinging success URL..."
-      curl -fsS --retry 3 "${HEALTHCHECK_URL}" > /dev/null || log_error "Failed to ping success URL."
-    else
-      log_error "Job failed with exit code ${exit_code}. Pinging fail URL..."
-      curl -fsS --retry 3 "${HEALTHCHECK_URL}/fail" > /dev/null || log_error "Failed to ping fail URL."
-    fi
-  fi
-
   log_info "Executing local file cleanup..."
   rm -f "$RCLONE_CONFIG_FILE" || true
   log_info "Cleanup finished."

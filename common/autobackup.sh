@@ -82,17 +82,6 @@ main() {
     fi
   done
 
-  # log_info "Dumping PostgreSQL database..."
-  # export PGPASSWORD="$POSTGRES_PASSWORD"
-  # # Add improved error handling for pg_dump
-  # if ! pg_dump --format=custom -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$DATABASE_NAME" > "${backup_folder}/${DATABASE_NAME}.dump"; then
-  #   log_error "pg_dump failed. Check database credentials and connectivity."
-  #   # The trap will handle the exit and health check ping.
-  #   exit 1
-  # fi
-  # unset PGPASSWORD
-  # log_info "Database dump completed."
-
   log_info "Dumping database '${DATABASE_NAME}'..."
   # This script will be provided by the specific Dockerfile (pg14, pg17, mysql, etc.).
   if ! /usr/local/bin/perform-db-dump > "${backup_folder}/${DATABASE_NAME}.dump"; then

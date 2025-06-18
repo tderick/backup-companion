@@ -54,6 +54,10 @@ echo "--- [env.sh] Validating S3 Provider Environment Variables ---"
 : "${POSTGRES_PASSWORD:?Environment variable POSTGRES_PASSWORD is required}"
 : "${POSTGRES_HOST:?Environment variable POSTGRES_HOST is required}"
 : "${DIRECTORIES_TO_BACKUP:?Environment variable DIRECTORIES_TO_BACKUP is required}"
+: "${CRON_SCHEDULE_BACKUP:?Environment variable CRON_SCHEDULE_BACKUP is required}"
+: "${CRON_SCHEDULE_CLEAN:?Environment variable CRON_SCHEDULE_CLEAN is required}"
+
+
 
 # === Required for ANY S3-Compatible Provider ===
 : "${S3_PROVIDER:?S3_PROVIDER is required (e.g., 'aws', 'cloudflare', 'minio', 'digitalocean')}"
@@ -79,12 +83,5 @@ case "${S3_PROVIDER,,}" in # Convert to lowercase for case-insensitivity
     : "${AWS_S3_ENDPOINT_URL:?AWS_S3_ENDPOINT_URL is required for S3_PROVIDER '${S3_PROVIDER}'}"
     ;;
 esac
-
-# === Optional with Defaults ===
-export NUMBER_OF_DAYS="${NUMBER_OF_DAYS:-30}"
-export BACKUP_PATH_PREFIX="${BACKUP_PATH_PREFIX:-}"
-export DRY_RUN="${DRY_RUN:-false}"
-export HEALTHCHECK_URL="${HEALTHCHECK_URL:-}"
-export RCLONE_FLAGS="${RCLONE_FLAGS:-}"
 
 echo "--- [env.sh] All required S3 variables for provider '${S3_PROVIDER}' are present. ---"

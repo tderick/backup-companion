@@ -1,17 +1,23 @@
-FROM alpine:3.22
+FROM alpine:3.22.0
 
 # Install dependencies
 RUN apk add --no-cache \
     bash \
     curl \
     unzip \
-    postgresql14-client \
+    postgresql15-client \
     cronie \
     rclone  \
     zip \
     tar \
     rsync
     
+
+# Optional environment variables with defaults
+ENV NUMBER_OF_DAYS=30
+ENV BACKUP_PATH_PREFIX=""
+ENV DRY_RUN=false
+ENV RCLONE_FLAGS=""
 
 # Copy the SHARED common scripts
 COPY ../../common/*.sh /usr/local/bin/
@@ -25,4 +31,3 @@ RUN chmod +x /usr/local/bin/*.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
-# CMD ["crond", "-f", "-s"]
