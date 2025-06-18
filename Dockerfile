@@ -7,8 +7,11 @@ RUN apk add --no-cache \
     unzip \
     postgresql17-client \
     cronie \
-    aws-cli \
-    zip
+    rclone  \
+    zip \
+    tar \
+    rsync
+    
 
 # Copy scripts
 COPY autobackup.sh /usr/local/bin/autobackup.sh
