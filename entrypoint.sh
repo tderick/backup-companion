@@ -97,7 +97,7 @@ CRON_SCHEDULE_CLEAN="${CRON_SCHEDULE_CLEAN:-0 2 * * *}"
 cat <<EOF > /etc/cron.d/backup_jobs
 # Pipe cron job output to the container's stdout/stderr for easy logging.
 $CRON_SCHEDULE_BACKUP root . /etc/container_environment.sh; /usr/local/bin/autobackup.sh > /proc/1/fd/1 2>/proc/1/fd/2
-$CRON_SCHEDULE_CLEAN root . /etc/container_environment.sh; /usr/local/bin/clean_old_backups.sh > /proc/1/fd/1 2>/proc/1/fd/2
+$CRON_SCHEDULE_CLEAN root . /etc/container_environment.sh; /usr/local/bin/clean_old_backup.sh > /proc/1/fd/1 2>/proc/1/fd/2
 EOF
 chmod 0644 /etc/cron.d/backup_jobs
 
