@@ -1,0 +1,28 @@
+FROM alpine:3.22
+
+# Install dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    unzip \
+    postgresql14-client \
+    cronie \
+    rclone  \
+    zip \
+    tar \
+    rsync
+    
+
+# Copy the SHARED common scripts
+COPY ../../common/*.sh /usr/local/bin/
+
+# Copy the PostgreSQL-specific dump script and RENAME it to the generic name
+COPY backups/pg/perform-db-dump.pg /usr/local/bin/perform-db-dump
+
+
+# Make all scripts executable
+RUN chmod +x /usr/local/bin/*.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# CMD ["crond", "-f", "-s"]

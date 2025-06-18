@@ -101,6 +101,7 @@ $CRON_SCHEDULE_CLEAN root . /etc/container_environment.sh; /usr/local/bin/clean_
 EOF
 chmod 0644 /etc/cron.d/backup_jobs
 
+
 # 4. Capture all environment variables for the cron jobs to use.
 {
   while IFS='=' read -r -d '' key value; do

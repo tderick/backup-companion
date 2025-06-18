@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+# This script will be copied to /usr/local/bin/perform-db-dump in the MySQL image.
+mysqldump \
+  --host="$MYSQL_HOST" \
+  --user="$MYSQL_USER" \
+  --password="$MYSQL_PASSWORD" \
+  "$MYSQL_DATABASE"

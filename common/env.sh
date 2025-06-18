@@ -82,7 +82,9 @@ esac
 
 # === Optional with Defaults ===
 export NUMBER_OF_DAYS="${NUMBER_OF_DAYS:-30}"
-# Optional path prefix within the bucket
 export BACKUP_PATH_PREFIX="${BACKUP_PATH_PREFIX:-}"
+export DRY_RUN="${DRY_RUN:-false}"
+export HEALTHCHECK_URL="${HEALTHCHECK_URL:-}"
+export RCLONE_FLAGS="${RCLONE_FLAGS:-}"
 
 echo "--- [env.sh] All required S3 variables for provider '${S3_PROVIDER}' are present. ---"

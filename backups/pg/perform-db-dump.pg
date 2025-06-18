@@ -1,0 +1,43 @@
+#!/bin/bash
+#
+# ==============================================================================
+# PostgreSQL Dump Script
+# ==============================================================================
+#
+# Description:
+#   This script performs the actual database dump for a PostgreSQL database.
+#   It is called by the main `autobackup.sh` script.
+#
+#   It uses the industry-standard "custom" format (`-Fc`) which is a compressed,
+#   flexible archive that allows for selective and parallel restores.
+#
+# Environment Variables:
+#   This script relies on the following variables being set by the container:
+#   - POSTGRES_HOST
+#   - POSTGRES_USER
+#   - POSTGRES_PASSWORD
+#   - DATABASE_NAME
+#
+# Output:
+#   This script writes the binary dump data directly to standard output.
+#   The calling script (`autobackup.sh`) is responsible for redirecting this
+#   output to a file.
+#
+# ==============================================================================
+
+set -euo pipefail
+
+# Temporarily export the password for pg_dump to use.
+# This is a standard and secure way to provide the password without
+# it appearing in the process list.
+export PGPASSWORD="$POSTGRES_PASSWORD"
+
+# Execute pg_dump with the specified options.
+# --format=custom (-Fc): Creates a compressed, flexible archive. This is best practice.
+pg_dump \
+    --format=custom \
+    --host="$POSTGRES_HOST" \
+    --username="$POSTGRES_USER" \
+    --dbname="$DATABASE_NAME"
+
+# The PGPASSWORD variable will be automatically unset when the script exits.
