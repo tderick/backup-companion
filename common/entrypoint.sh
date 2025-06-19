@@ -48,8 +48,21 @@ set -euo pipefail
 
 echo "--- [entrypoint.sh] Starting container setup ---"
 
-# 1. Validate environment variables by sourcing env.sh. If it fails, this script stops.
+# 0. Validate environment variables by sourcing env.sh. If it fails, this script stops.
 source /usr/local/bin/env.sh
+
+# 1. Timezone configuration
+TZ="${TZ:-UTC}"  # Default to UTC if TZ not set
+
+if [ -f "/usr/share/zoneinfo/$TZ" ]; then
+  ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime
+  echo "$TZ" > /etc/timezone
+  echo "--- [entrypoint.sh] Timezone set to: $TZ ---"
+else
+  echo "⚠️  Invalid TZ value '$TZ'. Falling back to UTC."
+  ln -snf /usr/share/zoneinfo/UTC /etc/localtime
+  echo "UTC" > /etc/timezone
+fi
 
 # 2. Perform S3 connection and bucket validation.
 echo "--- [entrypoint.sh] Performing S3 connection test for bucket '${BUCKET_NAME}'... ---"

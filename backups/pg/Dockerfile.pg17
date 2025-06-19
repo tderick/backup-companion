@@ -10,7 +10,8 @@ RUN apk add --no-cache \
     rclone  \
     zip \
     tar \
-    rsync
+    rsync\
+    tzdata
 
 # Optional environment variables with defaults
 ENV NUMBER_OF_DAYS=30
