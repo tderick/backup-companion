@@ -116,6 +116,7 @@ Set `S3_PROVIDER` to one of the following (case-insensitive) values and provide 
 | `AWS_S3_ENDPOINT_URL`| The endpoint URL for non-AWS S3 providers. | `""` (empty) |
 | `DRY_RUN` | If set to `"true"`, the cleanup job will only show what would be deleted. | `false` |
 | `RCLONE_FLAGS` | A space-separated string of extra flags for the `rclone copyto` command. | `""` |
+| `TZ` | Specify the timezone | `UTC`|
 
 ## 🏷️ Docker Image Tags
 
