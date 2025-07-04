@@ -44,21 +44,37 @@
 #
 # ==============================================================================
 
-set -e
+set -euo pipefail
 
-echo "--- [env.sh] Validating S3 Provider Environment Variables ---"
+: "${DB_DRIVER:?DB_DRIVER is required (e.g., 'postgres' or 'mysql' or 'mariadb')}"
+
+echo "--- [env.sh] Validating DB_DRIVER = ${DB_DRIVER} ---"
+
+case "${DB_DRIVER,,}" in
+  postgres)
+    : "${POSTGRES_HOST:?POSTGRES_HOST is required for PostgreSQL}"
+    : "${POSTGRES_USER:?POSTGRES_USER is required for PostgreSQL}"
+    : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required for PostgreSQL}"
+    ;;
+  mysql|mariadb)
+    : "${MYSQL_HOST:?MYSQL_HOST is required for MySQL/MariaDB}"
+    : "${MYSQL_USER:?MYSQL_USER is required for MySQL/MariaDB}"
+    : "${MYSQL_PASSWORD:?MYSQL_PASSWORD is required for MySQL/MariaDB}"
+    ;;
+  *)
+    echo "Unknown DB_DRIVER: '${DB_DRIVER}'. Must be 'postgres' or 'mysql'/'mariadb'."
+    exit 1
+    ;;
+esac
 
 # === Required for ANY Backup Task ===
 : "${DATABASE_NAME:?Environment variable DATABASE_NAME is required}"
-: "${POSTGRES_USER:?Environment variable POSTGRES_USER is required}"
-: "${POSTGRES_PASSWORD:?Environment variable POSTGRES_PASSWORD is required}"
-: "${POSTGRES_HOST:?Environment variable POSTGRES_HOST is required}"
-: "${DIRECTORIES_TO_BACKUP:?Environment variable DIRECTORIES_TO_BACKUP is required}"
+#: "${DIRECTORIES_TO_BACKUP:?Environment variable DIRECTORIES_TO_BACKUP is required}"
 : "${CRON_SCHEDULE_BACKUP:?Environment variable CRON_SCHEDULE_BACKUP is required}"
 : "${CRON_SCHEDULE_CLEAN:?Environment variable CRON_SCHEDULE_CLEAN is required}"
 
 
-
+echo "--- [env.sh] Validating S3 Provider Environment Variables ---"
 # === Required for ANY S3-Compatible Provider ===
 : "${S3_PROVIDER:?S3_PROVIDER is required (e.g., 'aws', 'cloudflare', 'minio', 'digitalocean')}"
 : "${BUCKET_NAME:?BUCKET_NAME is required for S3 storage}"

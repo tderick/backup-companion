@@ -121,7 +121,7 @@ Set `S3_PROVIDER` to one of the following (case-insensitive) values and provide 
 
 We provide different image variants for different versions of PostgreSQL client tools. Always use the tag that matches your database version.
 
-*   `your-dockerhub-username/backup-companion:latest`: Points to the latest stable PostgreSQL version (recommended for most users).
+*   `tderick/backup-companion:latest`: Points to the latest stable PostgreSQL version (recommended for most users).
 *   `tderick/backup-companion:1.0-pg17`: Rolling tag for the latest release supporting PostgreSQL 17.
 *   `tderick/backup-companion:1.0-pg16`: Rolling tag for the latest release supporting PostgreSQL 16.
 *   `tderick/backup-companion:1.0-pg16`: Rolling tag for the latest release supporting PostgreSQL 15.

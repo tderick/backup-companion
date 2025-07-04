@@ -66,7 +66,7 @@ main() {
   # === 1. Prepare Backup Files ===
   cd /tmp
   local timestamp
-  timestamp=$(date -u +'%Y-%m-%dT%H-%M-%SZ')
+  timestamp=$(date +'%Y-%m-%dT%H-%M-%SZ')
   local backup_folder="${DATABASE_NAME}_backup_${timestamp}"
   mkdir -p "$backup_folder"
 
