@@ -44,85 +44,81 @@
 #
 # ==============================================================================
 
+#!/bin/bash
 set -euo pipefail
 
-echo "--- [entrypoint.sh] Starting container setup ---"
+# Define a script name for logging purposes, then source the shared library.
+readonly SCRIPT_NAME="ENTRYPOINT"
+source /usr/local/bin/lib.sh
 
-# 0. Validate environment variables by sourcing env.sh. If it fails, this script stops.
-source /usr/local/bin/env.sh
+# --- Helper Functions (Specific to entrypoint.sh) ---
+test_s3_connection() {
+  log_info "Performing S3 connection test for bucket '${BUCKET_NAME}'..."
+  local temp_config
+  temp_config=$(mktemp /tmp/rclone_test.XXXXXX)
+  trap 'rm -f "$temp_config"' RETURN
 
-# 1. Timezone configuration
-TZ="${TZ:-UTC}"  # Default to UTC if TZ not set
+  # <<< The key change is here: calling the shared function >>>
+  generate_rclone_config "$temp_config"
 
-if [ -f "/usr/share/zoneinfo/$TZ" ]; then
-  ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime
-  echo "$TZ" > /etc/timezone
-  echo "--- [entrypoint.sh] Timezone set to: $TZ ---"
-else
-  echo "⚠️  Invalid TZ value '$TZ'. Falling back to UTC."
-  ln -snf /usr/share/zoneinfo/UTC /etc/localtime
-  echo "UTC" > /etc/timezone
-fi
+  if ! rclone --config "$temp_config" size "s3_remote:${BUCKET_NAME}"; then
+      log_error "CRITICAL: Rclone connection test failed!"
+      exit 1
+  fi
+  log_info "Rclone S3 connection test successful."
+}
 
-# 2. Perform S3 connection and bucket validation.
-echo "--- [entrypoint.sh] Performing S3 connection test for bucket '${BUCKET_NAME}'... ---"
-__rclone_config_file=$(mktemp /tmp/rclone_test.XXXXXX)
-trap 'rm -f "$__rclone_config_file"' EXIT # Ensure cleanup
+# Sets the container's timezone based on the TZ environment variable.
+setup_timezone() {
+  log_info "Configuring timezone..."
+  local tz="${TZ:-UTC}" # Default to UTC if TZ is not set
 
-# Translate the user-friendly S3_PROVIDER name into the value rclone requires.
-declare rclone_provider_value
-case "${S3_PROVIDER,,}" in # Convert to lowercase for case-insensitivity
-  aws)                rclone_provider_value="AWS" ;;
-  cloudflare|r2)      rclone_provider_value="Other" ;;
-  minio)              rclone_provider_value="Minio" ;;
-  digitalocean)       rclone_provider_value="DigitalOcean" ;;
-  *)                  rclone_provider_value="Other" ;;
-esac
-echo "--- [entrypoint.sh] Using rclone provider value: '${rclone_provider_value}' ---"
+  if [ -f "/usr/share/zoneinfo/$tz" ]; then
+    ln -snf "/usr/share/zoneinfo/$tz" /etc/localtime
+    echo "$tz" > /etc/timezone
+    log_info "Timezone set to: $tz"
+  else
+    log_error "Invalid TZ value '$tz'. Falling back to UTC."
+    ln -snf /usr/share/zoneinfo/UTC /etc/localtime
+    echo "UTC" > /etc/timezone
+  fi
+}
 
-# Generate a temporary rclone config for the test.
-cat <<EOF > "$__rclone_config_file"
-[s3_remote]
-type = s3
-provider = ${rclone_provider_value}
-access_key_id = ${AWS_ACCESS_KEY_ID}
-secret_access_key = ${AWS_SECRET_ACCESS_KEY}
-region = ${AWS_REGION}
-endpoint = ${AWS_S3_ENDPOINT_URL:-}
-acl = private
+#
+# Creates cron jobs and captures the current environment for them to use.
+#
+setup_cron() {
+  log_info "Setting up cron jobs..."
+
+  # 1. Save all environment variables to a file that cron can source.
+  # This is the most reliable way to pass the environment to cron jobs.
+  {
+    while IFS='=' read -r -d '' key value; do
+      # Escape single quotes in the value for safe shell execution.
+      printf "export %s='%s'\n" "$key" "$(printf '%s' "$value" | sed "s/'/'\\\\''/g")"
+    done < /proc/self/environ
+  } > /etc/container_environment.sh
+
+  # 2. Create the cron job definitions.
+  cat <<EOF > /etc/cron.d/s3_backup_jobs
+# Pipe cron job output to the container's stdout/stderr for easy logging via `docker logs`.
+${CRON_SCHEDULE_BACKUP} root . /etc/container_environment.sh; /usr/local/bin/autobackup.sh > /proc/1/fd/1 2>/proc/1/fd/2
+${CRON_SCHEDULE_CLEAN} root . /etc/container_environment.sh; /usr/local/bin/clean_old_backup.sh > /proc/1/fd/1 2>/proc/1/fd/2
 EOF
 
-# Use `rclone size` to verify credentials AND access to the specific bucket. Fails fast.
-if ! rclone --config "$__rclone_config_file" size "s3_remote:${BUCKET_NAME}"; then
-    echo "--- [entrypoint.sh] CRITICAL: Rclone connection test failed! ---"
-    echo "Could not access bucket '${BUCKET_NAME}'. Check credentials, region, endpoint, and bucket permissions."
-    echo "The container will now exit."
-    exit 1
-fi
-echo "--- [entrypoint.sh] Rclone S3 connection test successful. ---"
+  chmod 0644 /etc/cron.d/s3_backup_jobs
+  log_info "Cron jobs created and environment captured."
+}
 
-# 3. Set up cron jobs and environment
-echo "--- [entrypoint.sh] Setting up cron jobs... ---"
-mkdir -p /var/log/backup
-CRON_SCHEDULE_BACKUP="${CRON_SCHEDULE_BACKUP:-0 1 * * *}"
-CRON_SCHEDULE_CLEAN="${CRON_SCHEDULE_CLEAN:-0 2 * * *}"
+# --- Main Execution ---
+main() {
+  log_info "Container setup started."
+  source /usr/local/bin/env.sh
+  setup_timezone
+  test_s3_connection
+  setup_cron
+  log_info "Setup complete. Starting cron daemon..."
+  exec crond -f  -s
+}
 
-cat <<EOF > /etc/cron.d/backup_jobs
-# Pipe cron job output to the container's stdout/stderr for easy logging.
-$CRON_SCHEDULE_BACKUP root . /etc/container_environment.sh; /usr/local/bin/autobackup.sh > /proc/1/fd/1 2>/proc/1/fd/2
-$CRON_SCHEDULE_CLEAN root . /etc/container_environment.sh; /usr/local/bin/clean_old_backup.sh > /proc/1/fd/1 2>/proc/1/fd/2
-EOF
-chmod 0644 /etc/cron.d/backup_jobs
-
-
-# 4. Capture all environment variables for the cron jobs to use.
-{
-  while IFS='=' read -r -d '' key value; do
-    printf "export %s='%s'\n" "$key" "$(printf '%s' "$value" | sed "s/'/'\\\\''/g")"
-  done < /proc/self/environ
-} > /etc/container_environment.sh
-
-echo "--- [entrypoint.sh] Setup complete. Starting cron daemon... ---"
-
-# 5. Start cron daemon in the foreground.
-exec crond -f -s
+main "$@"
