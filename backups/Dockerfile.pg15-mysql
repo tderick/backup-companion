@@ -5,7 +5,8 @@ RUN apk add --no-cache \
     bash \
     curl \
     unzip \
-    postgresql17-client \
+    postgresql16-client \
+    mariadb-client \
     cronie \
     rclone  \
     zip \
@@ -20,14 +21,16 @@ ENV DRY_RUN=false
 ENV RCLONE_FLAGS=""
 
 # Copy the SHARED common scripts
-COPY ../../common/*.sh /usr/local/bin/
+COPY ../common/*.sh /usr/local/bin/
 
 # Copy the PostgreSQL-specific dump script and RENAME it to the generic name
-COPY backups/pg/perform-db-dump.pg /usr/local/bin/perform-db-dump
+COPY backups/perform-db-dump.pg /usr/local/bin/perform-db-dump.pg
+COPY backups/perform-db-dump.mysql /usr/local/bin/perform-db-dump.mysql
 
 
 # Make all scripts executable
-RUN chmod +x /usr/local/bin/*.sh /usr/local/bin/perform-db-dump
+RUN chmod +x /usr/local/bin/*.sh /usr/local/bin/perform-db-dump.pg
+RUN chmod +x /usr/local/bin/*.sh /usr/local/bin/perform-db-dump.mysql
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 

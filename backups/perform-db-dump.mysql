@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# ==============================================================================
+# MySQL/MariaDB Dump Worker
+# ==============================================================================
+#
+# Description:
+#   Dumps a single MySQL/MariaDB database to stdout as an SQL file.
+#
+# Arguments:
+#   $1: The name of the database to dump.
+#
+# Environment Variables:
+#   Relies on MYSQL_HOST, MYSQL_PORT, MYSQL_USER, and MYSQL_PASSWORD
+#   being set by the calling script.
+#
+# ==============================================================================
+
+set -euo pipefail
+
+if [ -z "${1:-}" ]; then
+  echo "Error: Database name argument is required." >&2
+  exit 1
+fi
+
+# Find the correct dump tool.
+DUMP_TOOL=$(command -v mariadb-dump || command -v mysqldump)
+
+if [ -z "$DUMP_TOOL" ]; then
+    echo "Error: Neither mariadb-dump nor mysqldump found in PATH." >&2
+    exit 1
+fi
+
+# Dump the database to stdout using the database name passed as an argument.
+"$DUMP_TOOL" \
+  --host="$MYSQL_HOST" \
+  --port="${MYSQL_PORT:-3306}" \
+  --user="$MYSQL_USER" \
+  --password="$MYSQL_PASSWORD" \
+  --single-transaction \
+  --quick \
+  --lock-tables=false \
+  --skip-ssl \
+  "$1"

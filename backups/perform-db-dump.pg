@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# ==============================================================================
+# PostgreSQL Dump Worker
+# ==============================================================================
+#
+# Description:
+#   Dumps a single PostgreSQL database to stdout in compressed custom format.
+#
+# Arguments:
+#   $1: The name of the database to dump.
+#
+# Environment Variables:
+#   This script relies on the standard libpq environment variables being set
+#   by the calling script (e.g., PGHOST, PGPORT, PGUSER, PGPASSWORD).
+#
+# ==============================================================================
+
+set -euo pipefail
+
+if [ -z "${1:-}" ]; then
+  echo "Error: Database name argument is required." >&2
+  exit 1
+fi
+
+# Execute pg_dump, using the database name passed as an argument.
+# --format=custom (-Fc): Creates a compressed, flexible archive. Best practice.
+pg_dump \
+    --format=custom \
+    --host="$PGHOST" \
+    --port="$PGPORT" \
+    --username="$PGUSER" \
+    --dbname="$1"

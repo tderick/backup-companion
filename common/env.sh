@@ -6,95 +6,130 @@
 #
 # Description:
 #   This script validates all required environment variables when the container
-#   starts. It is sourced by the main `entrypoint.sh` script.
+#   starts. Its primary purpose is to act as the first line of defense against
+#   misconfiguration, failing fast with clear error messages.
 #
-#   Its primary purpose is to act as the first line of defense against
-#   misconfiguration, failing fast with a clear error message if a required
-#   variable is missing or if the combination of variables is incorrect for the
-#   chosen `S3_PROVIDER`.
+# --- CONFIGURATION: BACKUP GROUPS (MANDATORY) ---
 #
-# --- Configuration: S3_PROVIDER ---
+# The script validates "backup groups". A group is a collection of databases
+# and/or directories that are backed up together into a single archive.
 #
-# The `S3_PROVIDER` environment variable is the most important setting. This script
-# validates that the correct corresponding variables (`AWS_REGION` and
-# `AWS_S3_ENDPOINT_URL`) are also set. Use one of the following exact values
-# (case-insensitive):
+# The number of space-separated groups in DATABASES and DIRECTORIES_TO_BACKUP
+# MUST be identical.
 #
-#   - `aws`:
-#     For Amazon Web Services S3.
-#     Requires: `AWS_REGION`.
-#     Endpoint URL must be empty.
+# - DATABASES: Space-separated groups of database connection strings.
+#   - A group of DBs is a space-separated list of connection strings.
+#   - Use "NONE" (case-sensitive) for groups without databases.
+#   - Format: "'db1:h1:p1:u1:p1 db2:h2:p2:u2:p2' 'db3:h3:p3:u3:p3' 'NONE'"
 #
-#   - `cloudflare` or `r2`:
-#     For Cloudflare R2 Storage.
-#     Requires: `AWS_S3_ENDPOINT_URL`.
+# - DIRECTORIES_TO_BACKUP: Space-separated groups of directory paths.
+#   - A group of directories is a colon-separated (:) list of paths.
+#   - Use "NONE" (case-sensitive) for groups without directories.
+#   - Format: "'/var/www/app1:/etc/app1' 'NONE' '/var/log/app3'"
 #
-#   - `minio`:
-#     For self-hosted Minio servers.
-#     Requires: `AWS_REGION` and `AWS_S3_ENDPOINT_URL`.
+# NOTE: At least one of the corresponding groups must not be "NONE".
+#       A group of "'NONE' 'NONE'" is invalid.
 #
-#   - `digitalocean`:
-#     For DigitalOcean Spaces.
-#     Requires: `AWS_REGION` and `AWS_S3_ENDPOINT_URL`.
-#
-#   - Any other value (e.g., `wasabi`, `backblaze`, `scaleway`):
-#     For any other S3-compatible provider. This will use a generic S3
-#     configuration.
-#     Requires: `AWS_REGION` and `AWS_S3_ENDPOINT_URL`.
+# --- Configuration: S3 Provider ---
+#   (Validation for S3 settings remains the same)
 #
 # ==============================================================================
 
 set -euo pipefail
 
-: "${DB_DRIVER:?DB_DRIVER is required (e.g., 'postgres' or 'mysql' or 'mariadb')}"
-
-echo "--- [env.sh] Validating DB_DRIVER = ${DB_DRIVER} ---"
+# === Core Service Validation ===
+: "${CRON_SCHEDULE_BACKUP:?CRON_SCHEDULE_BACKUP is required}"
+: "${CRON_SCHEDULE_CLEAN:?CRON_SCHEDULE_CLEAN is required}"
+: "${DB_DRIVER:?DB_DRIVER is required (e.g., 'postgres', 'mysql').}"
 
 case "${DB_DRIVER,,}" in
-  postgres)
-    : "${POSTGRES_HOST:?POSTGRES_HOST is required for PostgreSQL}"
-    : "${POSTGRES_USER:?POSTGRES_USER is required for PostgreSQL}"
-    : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required for PostgreSQL}"
-    ;;
-  mysql|mariadb)
-    : "${MYSQL_HOST:?MYSQL_HOST is required for MySQL/MariaDB}"
-    : "${MYSQL_USER:?MYSQL_USER is required for MySQL/MariaDB}"
-    : "${MYSQL_PASSWORD:?MYSQL_PASSWORD is required for MySQL/MariaDB}"
+  postgres|mysql|mariadb)
+    echo "--- [env.sh] Using DB_DRIVER: ${DB_DRIVER}"
     ;;
   *)
-    echo "Unknown DB_DRIVER: '${DB_DRIVER}'. Must be 'postgres' or 'mysql'/'mariadb'."
+    echo "Error: Unknown DB_DRIVER: '${DB_DRIVER}'. Must be 'postgres', 'mysql', or 'mariadb'." >&2
     exit 1
     ;;
 esac
 
-# === Required for ANY Backup Task ===
-: "${DATABASE_NAME:?Environment variable DATABASE_NAME is required}"
-#: "${DIRECTORIES_TO_BACKUP:?Environment variable DIRECTORIES_TO_BACKUP is required}"
-: "${CRON_SCHEDULE_BACKUP:?Environment variable CRON_SCHEDULE_BACKUP is required}"
-: "${CRON_SCHEDULE_CLEAN:?Environment variable CRON_SCHEDULE_CLEAN is required}"
+# === Backup Group Configuration Validation ===
+echo "--- [env.sh] Validating Backup Group Configuration ---"
+: "${DATABASES:?DATABASES environment variable is required.}"
+: "${DIRECTORIES_TO_BACKUP:?DIRECTORIES_TO_BACKUP environment variable is required.}"
+
+# Read space-separated groups into arrays. This is the standard, safe way.
+read -r -a db_groups <<< "$DATABASES"
+read -r -a dir_groups <<< "$DIRECTORIES_TO_BACKUP"
+
+# 1. Validate that group counts match.
+if [ ${#db_groups[@]} -ne ${#dir_groups[@]} ]; then
+  echo "Error: Configuration mismatch." >&2
+  echo "The number of groups in DATABASES (${#db_groups[@]}) does not match the number of groups in DIRECTORIES_TO_BACKUP (${#dir_groups[@]})." >&2
+  exit 1
+fi
+echo "Found ${#db_groups[@]} backup group(s). Proceeding with validation..."
+
+# 2. Loop through each group to validate its contents.
+for i in "${!db_groups[@]}"; do
+  group_num=$((i + 1))
+  db_group="${db_groups[$i]}"
+  dir_group="${dir_groups[$i]}"
+
+  echo "  - Validating Group #${group_num}..."
+
+  # A group cannot be completely empty.
+  if [[ "$db_group" == "NONE" && "$dir_group" == "NONE" ]]; then
+    echo "Error: Group #${group_num} is empty. Both DATABASES and DIRECTORIES_TO_BACKUP are 'NONE'." >&2
+    exit 1
+  fi
+
+  # Validate the database part of the group
+  if [[ "$db_group" != "NONE" ]]; then
+    for db_conn_string in $db_group; do
+      # Use `tr` to count colons. A valid string must have 4 colons (5 parts).
+      if [[ $(tr -dc ':' <<< "$db_conn_string" | awk '{ print length }') -ne 4 ]]; then
+        echo "Error: Invalid database connection string format in Group #${group_num}." >&2
+        echo "Malformed entry: '${db_conn_string}'" >&2
+        echo "Expected format: 'DB_NAME:DB_HOST:DB_PORT:DB_USER:DB_PASSWORD'" >&2
+        exit 1
+      fi
+      # We don't need to check for empty parts here, as the backup script will fail if they are missing.
+      # The main goal is to validate the structure.
+    done
+  fi
+  
+  # Validate the directory part of the group
+  if [[ "$dir_group" != "NONE" ]]; then
+    if [[ "$dir_group" == *'::'* ]] || [[ "${dir_group:0:1}" == ":" ]] || [[ "${dir_group: -1}" == ":" ]]; then
+      echo "Error: Invalid directory format in Group #${group_num}." >&2
+      echo "Malformed entry: '${dir_group}'" >&2
+      echo "Details: Found empty path component (e.g., '/path/one::/path/two' or leading/trailing colons)." >&2
+      exit 1
+    fi
+  fi
+done
+echo "--- [env.sh] All backup groups are correctly configured. ---"
 
 
+# === S3 Provider Validation (Unchanged) ===
 echo "--- [env.sh] Validating S3 Provider Environment Variables ---"
-# === Required for ANY S3-Compatible Provider ===
-: "${S3_PROVIDER:?S3_PROVIDER is required (e.g., 'aws', 'cloudflare', 'minio', 'digitalocean')}"
+: "${S3_PROVIDER:?S3_PROVIDER is required (e.g., 'aws', 'cloudflare', 'minio')}"
 : "${BUCKET_NAME:?BUCKET_NAME is required for S3 storage}"
 : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required for S3 storage}"
 : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required for S3 storage}"
 
-# === Provider-Specific Validation ===
-# Ensure the right combination of region/endpoint is provided for the chosen S3 provider.
-case "${S3_PROVIDER,,}" in # Convert to lowercase for case-insensitivity
+case "${S3_PROVIDER,,}" in
   aws)
-    # AWS S3 requires a region but does not use a custom endpoint URL.
     : "${AWS_REGION:?AWS_REGION is required for S3_PROVIDER 'aws'}"
+    if [ -n "${AWS_S3_ENDPOINT_URL:-}" ]; then
+        echo "Warning: AWS_S3_ENDPOINT_URL is set for S3_PROVIDER 'aws' but should be empty. It will be ignored." >&2
+    fi
     ;;
   cloudflare|r2)
-    # Cloudflare R2 requires an endpoint URL. Region is not used but can be set to 'auto'.
     : "${AWS_S3_ENDPOINT_URL:?AWS_S3_ENDPOINT_URL is required for S3_PROVIDER '${S3_PROVIDER}'}"
-    export AWS_REGION="${AWS_REGION:-auto}" # Set a safe default if not provided
+    export AWS_REGION="${AWS_REGION:-auto}"
     ;;
-  minio|digitalocean|*)
-    # Most other providers (Minio, DigitalOcean, etc.) require both.
+  *) # minio, digitalocean, wasabi, etc.
     : "${AWS_REGION:?AWS_REGION is required for S3_PROVIDER '${S3_PROVIDER}'}"
     : "${AWS_S3_ENDPOINT_URL:?AWS_S3_ENDPOINT_URL is required for S3_PROVIDER '${S3_PROVIDER}'}"
     ;;
